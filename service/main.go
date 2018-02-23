@@ -12,6 +12,7 @@ import (
 	"context"
 	"cloud.google.com/go/storage"
 	"io"
+	"cloud.google.com/go/bigtable"
 )
 
 type Location struct {
@@ -32,10 +33,10 @@ const (
 	TYPE        = "post"
 	DISTANCE    = "200km"
 	// Needs to update
-	//PROJECT_ID  = "around-xxx"
-	//BT_INSTANCE = "around-post"
+	PROJECT_ID  = "around194922"
+	BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud.
-	ES_URL      = "http://35.230.102.249:9200"
+	ES_URL      = "http://104.198.111.54:9200"
 	BUCKET_NAME = "post-image-around194922"
 )
 
@@ -118,7 +119,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	// replace it with your real bucket name.
-	_, attrs, err := saveToGCS(ctx, file, BUCKET_NAME, id)
+	_, attrs, err := saveToGCS(ctx, file, id)
 	if err != nil {
 		http.Error(w, "GCS is not setup", http.StatusInternalServerError)
 		fmt.Printf("GCS is not setup %v\n", err)
@@ -132,10 +133,32 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	saveToES(p, id)
 
 	// Save to BigTable.
-	//saveToBigTable(p, id)
+	saveToBT(ctx, p, id)
 
 }
+func saveToBT(ctx context.Context, p *Post, id string) {
+	bt_client, err := bigtable.NewClient(ctx, PROJECT_ID, BT_INSTANCE)
+	if err != nil {
+		panic(err)
+		return
+	}
+	tbl := bt_client.Open("post")
+	mut := bigtable.NewMutation()
+	t := bigtable.Now()
+	mut.Set("post", "id", t, []byte(id))
+	mut.Set("post", "user", t, []byte(p.User))
+	mut.Set("post", "message", t, []byte(p.Message))
+	mut.Set("post", "url", t, []byte(p.Url))
+	mut.Set("location", "lat", t, []byte(strconv.FormatFloat(p.Location.Lat, 'f', -1, 64)))
+	mut.Set("location", "lon", t, []byte(strconv.FormatFloat(p.Location.Lon, 'f', -1, 64)))
 
+	err = tbl.Apply(ctx, id, mut)
+	if err != nil {
+		panic(err)
+		return
+	}
+	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
+}
 // Save a post to ElasticSearch
 func saveToES(p *Post, id string) {
 	// Create a client
@@ -160,14 +183,15 @@ func saveToES(p *Post, id string) {
 
 	fmt.Printf("Post is saved to Index: %s\n", p.Message)
 }
-func saveToGCS(ctx context.Context, r io.Reader, bucket, name string) (*storage.ObjectHandle, *storage.ObjectAttrs, error) {
+
+func saveToGCS(ctx context.Context, r io.Reader, name string) (*storage.ObjectHandle, *storage.ObjectAttrs, error) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer client.Close()
 
-	bh := client.Bucket(bucket)
+	bh := client.Bucket(BUCKET_NAME)
 	// Next check if the bucket exists
 	if _, err = bh.Attrs(ctx); err != nil {
 		return nil, nil, err

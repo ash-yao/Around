@@ -133,7 +133,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	saveToES(p, id)
 
 	// Save to BigTable.
-	saveToBT(ctx, p, id)
+	//saveToBT(ctx, p, id)
 
 }
 func saveToBT(ctx context.Context, p *Post, id string) {

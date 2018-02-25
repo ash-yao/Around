@@ -89,8 +89,6 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 
 
 	// 32 << 20 is the maxMemory param for ParseMultipartForm, equals to 32MB (1MB = 1024 * 1024 bytes = 2^20 bytes)
-	// After you call ParseMultipartForm, the file will be saved in the server memory with maxMemory size.
-	// If the file size is larger than maxMemory, the rest of the data will be saved in a system temporary file.
 	r.ParseMultipartForm(32 << 20)
 
 	// Parse from form data.
@@ -118,7 +116,6 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// replace it with your real bucket name.
 	_, attrs, err := saveToGCS(ctx, file, id)
 	if err != nil {
 		http.Error(w, "GCS is not setup", http.StatusInternalServerError)
@@ -159,6 +156,7 @@ func saveToBT(ctx context.Context, p *Post, id string) {
 	}
 	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
 }
+
 // Save a post to ElasticSearch
 func saveToES(p *Post, id string) {
 	// Create a client
@@ -245,15 +243,9 @@ func handlerSearch(w http.ResponseWriter, r *http.Request){
 		panic(err)
 	}
 
-	// searchResult is of type SearchResult and returns hits, suggestions,
-	// and all kinds of other information from Elasticsearch.
 	fmt.Printf("Query took %d milliseconds\n", searchResult.TookInMillis)
-	// TotalHits is another convenience function that works even when something goes wrong.
 	fmt.Printf("Found a total of %d post\n", searchResult.TotalHits())
 
-	// Each is a convenience function that iterates over hits in a search result.
-	// It makes sure you don't need to check for nil values in the response.
-	// However, it ignores errors in serialization.
 	var typ Post
 	var ps []Post
 	for _, item := range searchResult.Each(reflect.TypeOf(typ)) { // instance of
